@@ -44,32 +44,38 @@ def index():
 @app.route('/api/upload_for_analysis', methods=['POST'])
 def upload_for_analysis():
     session.clear()
-    if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
-    file = request.files['file']
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    session['analysis_filepath'] = filepath
-    session['analysis_filename'] = filename
-    session['staged_removals'] = {}
-    xls = pd.ExcelFile(filepath)
-    return jsonify({"fileName": filename, "sheets": xls.sheet_names, "columns": list(pd.read_excel(xls, sheet_name=xls.sheet_names[0]).columns)})
+    try:
+        if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
+        file = request.files['file']
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        session['analysis_filepath'] = filepath
+        session['analysis_filename'] = filename
+        session['staged_removals'] = {}
+        xls = pd.ExcelFile(filepath)
+        return jsonify({"fileName": filename, "sheets": xls.sheet_names, "columns": list(pd.read_excel(xls, sheet_name=xls.sheet_names[0]).columns)})
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado no upload: {str(e)}'}), 500
 
 @app.route('/api/get_columns_for_analysis', methods=['POST'])
 def get_columns_for_analysis():
-    sheet_name = request.json.get('sheetName')
-    filepath = session.get('analysis_filepath')
-    df = pd.read_excel(filepath, sheet_name=sheet_name)
-    return jsonify({"columns": list(df.columns)})
+    try:
+        sheet_name = request.json.get('sheetName')
+        filepath = session.get('analysis_filepath')
+        df = pd.read_excel(filepath, sheet_name=sheet_name)
+        return jsonify({"columns": list(df.columns)})
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado ao buscar colunas: {str(e)}'}), 500
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
-    data = request.json
-    sheet_title, columns_to_check, filepath = data.get('sheetTitle'), data.get('columns'), session.get('analysis_filepath')
-    min_repetitions = 3
-    if not all([sheet_title, columns_to_check, filepath]): return jsonify({"error": "Dados insuficientes"}), 400
-
     try:
+        data = request.json
+        sheet_title, columns_to_check, filepath = data.get('sheetTitle'), data.get('columns'), session.get('analysis_filepath')
+        min_repetitions = 3
+        if not all([sheet_title, columns_to_check, filepath]): return jsonify({"error": "Dados insuficientes"}), 400
+
         df = pd.read_excel(filepath, sheet_name=sheet_title)
         frequent_values = {col: set(df[col].astype(str).apply(standardize_text).value_counts()[lambda x: x >= min_repetitions].index) for col in columns_to_check if col in df.columns}
         
@@ -96,34 +102,41 @@ def analyze():
 
         return jsonify({"headers": columns_to_check, "rows": inconsistent_rows_data})
     except Exception as e:
-        return jsonify({'error': f'Erro ao analisar dados: {e}'}), 500
+        return jsonify({'error': f'Erro inesperado na análise: {str(e)}'}), 500
 
 @app.route('/api/stage_tab_changes', methods=['POST'])
 def stage_tab_changes():
-    data = request.json
-    sheet_title, rows_to_remove = data.get('sheetTitle'), data.get('rowsToRemove')
-    if 'staged_removals' not in session: session['staged_removals'] = {}
-    staged = session['staged_removals']
-    staged[sheet_title] = rows_to_remove
-    session['staged_removals'] = staged
-    return jsonify({"success": True, "message": f"Decisões para '{sheet_title}' foram guardadas."})
+    try:
+        data = request.json
+        sheet_title, rows_to_remove = data.get('sheetTitle'), data.get('rowsToRemove')
+        if 'staged_removals' not in session: session['staged_removals'] = {}
+        staged = session['staged_removals']
+        staged[sheet_title] = rows_to_remove
+        session['staged_removals'] = staged
+        return jsonify({"success": True, "message": f"Decisões para '{sheet_title}' foram guardadas."})
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado ao guardar decisões: {str(e)}'}), 500
 
 @app.route('/api/process_all_staged_changes', methods=['POST'])
 def process_all_staged_changes():
-    staged_removals = session.get('staged_removals', {})
-    filepath = session.get('analysis_filepath')
-    if not os.path.exists(filepath): return jsonify({"error": "Ficheiro original não encontrado"}), 404
-        
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        xls = pd.ExcelFile(filepath)
-        for name in xls.sheet_names:
-            df = pd.read_excel(xls, sheet_name=name)
-            if name in staged_removals and staged_removals[name]:
-                df.drop(index=[idx - 2 for idx in staged_removals[name]], inplace=True)
-            df.to_excel(writer, sheet_name=name, index=False)
-    output.seek(0)
-    return send_file(output, as_attachment=True, download_name=f"processado_final_{session.get('analysis_filename', 'f.xlsx')}", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    try:
+        staged_removals = session.get('staged_removals', {})
+        filepath = session.get('analysis_filepath')
+        if not os.path.exists(filepath): return jsonify({"error": "Ficheiro original não encontrado"}), 404
+            
+        output = io.BytesIO()
+        # ALTERAÇÃO AQUI: Especifica o motor 'xlsxwriter' para melhor desempenho
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            xls = pd.ExcelFile(filepath)
+            for name in xls.sheet_names:
+                df = pd.read_excel(xls, sheet_name=name)
+                if name in staged_removals and staged_removals[name]:
+                    df.drop(index=[idx - 2 for idx in staged_removals[name]], inplace=True)
+                df.to_excel(writer, sheet_name=name, index=False)
+        output.seek(0)
+        return send_file(output, as_attachment=True, download_name=f"processado_final_{session.get('analysis_filename', 'f.xlsx')}", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado ao gerar o ficheiro: {str(e)}'}), 500
 
 # =====================================================================
 # FLUXO 2: ATUALIZAÇÃO DE PLANILHA
@@ -139,64 +152,61 @@ def upload_and_store(file, session_prefix):
 @app.route('/api/upload_base', methods=['POST'])
 def upload_base_file():
     session.clear()
-    if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
-    return jsonify(upload_and_store(request.files['file'], 'base'))
+    try:
+        if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
+        return jsonify(upload_and_store(request.files['file'], 'base'))
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado: {str(e)}'}), 500
 
 @app.route('/api/upload_update', methods=['POST'])
 def upload_update_file():
-    if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
-    return jsonify(upload_and_store(request.files['file'], 'update'))
+    try:
+        if 'file' not in request.files: return jsonify({"error": "Nenhum ficheiro enviado"}), 400
+        return jsonify(upload_and_store(request.files['file'], 'update'))
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado: {str(e)}'}), 500
 
 @app.route('/api/get_common_columns', methods=['POST'])
 def get_common_columns():
-    data = request.json
-    base_sheet, update_sheet = data.get('baseSheet'), data.get('updateSheet')
-    base_fp, update_fp = session.get('base_filepath'), session.get('update_filepath')
-    df_base = pd.read_excel(base_fp, sheet_name=base_sheet)
-    df_update = pd.read_excel(update_fp, sheet_name=update_sheet)
-    return jsonify({"commonColumns": list(set(df_base.columns) & set(df_update.columns))})
+    try:
+        data = request.json
+        base_sheet, update_sheet = data.get('baseSheet'), data.get('updateSheet')
+        base_fp, update_fp = session.get('base_filepath'), session.get('update_filepath')
+        df_base = pd.read_excel(base_fp, sheet_name=base_sheet)
+        df_update = pd.read_excel(update_fp, sheet_name=update_sheet)
+        return jsonify({"commonColumns": list(set(df_base.columns) & set(df_update.columns))})
+    except Exception as e:
+        return jsonify({'error': f'Erro inesperado: {str(e)}'}), 500
 
 @app.route('/api/process_multi_tab_update', methods=['POST'])
 def process_multi_tab_update():
-    instructions = request.json.get('instructions')
-    base_fp, update_fp = session.get('base_filepath'), session.get('update_filepath')
-    if not all([instructions, base_fp, update_fp]):
-        return jsonify({"error": "Instruções de fusão ou ficheiros em falta."}), 400
-    
     try:
+        instructions = request.json.get('instructions')
+        base_fp, update_fp = session.get('base_filepath'), session.get('update_filepath')
+        if not all([instructions, base_fp, update_fp]): return jsonify({"error": "Instruções de fusão ou ficheiros em falta."}), 400
+        
         dfs_base = pd.read_excel(base_fp, sheet_name=None)
         dfs_update = pd.read_excel(update_fp, sheet_name=None)
         
         for inst in instructions:
             b_tab, u_tab, key = inst['baseTab'], inst['updateTab'], inst['keyColumn']
             if b_tab in dfs_base and u_tab in dfs_update:
-                df_b = dfs_base[b_tab]
-                df_u = dfs_update[u_tab]
+                df_b, df_u = dfs_base[b_tab], dfs_update[u_tab]
                 if key in df_b.columns and key in df_u.columns:
-                    # **LÓGICA DE FUSÃO CORRIGIDA AQUI**
-                    # 1. Definir o índice em ambos os dataframes
                     df_b = df_b.set_index(key)
                     df_u = df_u.set_index(key)
-                    
-                    # 2. Filtrar o dataframe base para manter apenas as chaves que existem no de atualização
-                    # Isto remove as linhas do base que foram excluídas no de atualização.
                     df_b_filtered = df_b[df_b.index.isin(df_u.index)]
-                    
-                    # 3. Atualizar os valores no dataframe base filtrado com os valores do de atualização
                     df_b_filtered.update(df_u)
-                    
-                    # 4. Substituir o dataframe antigo pelo novo, já processado
                     dfs_base[b_tab] = df_b_filtered.reset_index()
 
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             for name, df in dfs_base.items():
                 df.to_excel(writer, sheet_name=name, index=False)
         output.seek(0)
         return send_file(output, as_attachment=True, download_name=f"atualizado_{session.get('base_filename', 'b.xlsx')}", mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-
     except Exception as e:
-        return jsonify({'error': f'Erro durante o processamento: {e}'}), 500
+        return jsonify({'error': f'Erro inesperado no processamento: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
