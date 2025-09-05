@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Análise e Tratamento de Dados</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sistema de Análise e Tratamento de Dados</h1>
+            <p class="subtitle">Escolha a operação que deseja realizar.</p>
+        </header>
+
+        <!-- Ecrã de Escolha Inicial -->
+        <div id="workflow-choice-container">
+            <div class="choice-card" data-workflow="analysis">
+                <h3>Análise de Inconsistências</h3>
+                <p>Limpe e filtre um único ficheiro com base em regras de negócio.</p>
+            </div>
+            <div class="choice-card" data-workflow="update">
+                <h3>Atualizar Planilha Base</h3>
+                <p>Faça a fusão de um ficheiro de atualização com um ficheiro base.</p>
+            </div>
+        </div>
+
+        <!-- FLUXO 1: ANÁLISE DE INCONSISTÊNCIAS -->
+        <div id="analysis-workflow-card" class="hidden">
+            <button class="btn-back">← Voltar ao Menu</button>
+            <div class="card" id="analysis-step1-card">
+                <h2>Passo 1: Envie a Planilha para Análise</h2>
+                <form id="analysis-upload-form">
+                    <div class="file-upload-wrapper"><input type="file" id="analysis-file-input" name="file" accept=".xlsx, .xls" required><label for="analysis-file-input" id="analysis-file-label">Clique para selecionar um ficheiro...</label></div>
+                    <button type="submit" class="btn">Carregar Ficheiro</button>
+                </form>
+            </div>
+            <div class="card hidden" id="analysis-step2-card">
+                <h2 id="analysis-step2-title">Passo 2: Configurar Análise por Aba</h2>
+                <div class="form-group"><label for="analysis-sheet-select">Selecione a Aba para Analisar:</label><select id="analysis-sheet-select" class="form-control"></select></div>
+                <div class="form-group"><label>Colunas de Parâmetro para esta Aba:</label><div id="analysis-columns-container" class="columns-grid"></div></div>
+                <button id="analyze-btn" class="btn">Analisar Aba</button>
+            </div>
+            <div class="card hidden" id="analysis-step3-card">
+                <h2>Passo 3: Decisões para a Aba "<span id="current-analysis-tab"></span>"</h2>
+                <!-- TEXTO DE INSTRUÇÃO ATUALIZADO -->
+                <p class="instruction">As linhas abaixo foram consideradas inconsistentes. Marque "Remover" para excluí-las da planilha final.</p>
+                <div id="inconsistencies-table-container"></div>
+                <div class="actions">
+                    <button id="confirm-decisions-btn" class="btn btn-secondary">Confirmar Decisões para esta Aba</button>
+                </div>
+            </div>
+            <div class="card hidden" id="analysis-summary-card">
+                <h2>Resumo do Processamento</h2>
+                <p class="instruction">As decisões para as abas abaixo foram guardadas. Analise outras abas ou processe o ficheiro final.</p>
+                <div id="analysis-summary-container"></div>
+                <div class="actions">
+                    <button id="process-all-btn" class="btn">Processar Tudo e Baixar Ficheiro Final</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLUXO 2: ATUALIZAR PLANILHA -->
+        <div id="update-workflow-card" class="hidden">
+            <button class="btn-back">← Voltar ao Menu</button>
+            <div class="card" id="update-stepA-card"><form id="base-upload-form"><h2>Passo A: Envie o Ficheiro Base</h2><div class="file-upload-wrapper"><input type="file" id="base-file-input" name="file" accept=".xlsx, .xls" required><label for="base-file-input" id="base-file-label">Ficheiro principal a ser atualizado...</label></div><button type="submit" class="btn">Carregar Ficheiro Base</button></form></div>
+            <div class="card hidden" id="update-stepB-card"><form id="update-upload-form"><h2>Passo B: Envie o Ficheiro de Atualização</h2><div class="file-upload-wrapper"><input type="file" id="update-file-input" name="file" accept=".xlsx, .xls" required><label for="update-file-input" id="update-file-label">Ficheiro com os novos dados...</label></div><button type="submit" class="btn">Carregar Ficheiro de Atualização</button></form></div>
+            <div class="card hidden" id="update-stepC-card">
+                <h2>Passo C: Configure a Fusão das Abas</h2>
+                <div class="merge-config-box">
+                    <div class="form-group"><label for="base-sheet-select">Aba do Ficheiro Base:</label><select id="base-sheet-select" class="form-control"></select></div>
+                    <div class="form-group"><label for="update-sheet-select">Aba do Ficheiro de Atualização:</label><select id="update-sheet-select" class="form-control"></select></div>
+                    <div class="form-group"><label for="key-column-select">Coluna Chave para Ligação:</label><select id="key-column-select" class="form-control" disabled></select></div>
+                    <button id="add-to-queue-btn" class="btn btn-secondary">Adicionar à Fila de Processamento</button>
+                </div>
+                <div class="queue-container">
+                    <h3>Fila de Processamento:</h3>
+                    <ul id="merge-queue-list"></ul>
+                </div>
+                <div class="actions"><button id="process-all-update-btn" class="btn" disabled>Processar Tudo e Baixar</button></div>
+            </div>
+        </div>
+
+        <div class="loader-overlay hidden" id="loader"><div class="loader-content"><div class="spinner"></div><p id="loader-text">A carregar...</p></div></div>
+        <div id="toast-container"></div>
+    </div>
+    <script src="/static/main.js"></script>
+</body>
+</html>
+
+
+
+
+
