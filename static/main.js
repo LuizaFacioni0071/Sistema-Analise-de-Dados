@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error);
             populateAnalysisColumns(data.columns);
-            analysisStep3.classList.add('hidden');
+            analysisStep3.classList.add('hidden'); // Esconde resultados antigos ao trocar de aba
         } catch (err) { showToast(err.message, 'error'); } finally { hideLoader(); }
     });
 
