@@ -125,7 +125,7 @@ def process_all_staged_changes():
         if not os.path.exists(filepath): return jsonify({"error": "Ficheiro original não encontrado"}), 404
             
         output = io.BytesIO()
-        # ALTERAÇÃO AQUI: Especifica o motor 'xlsxwriter' para melhor desempenho
+        # OTIMIZAÇÃO: Especifica o motor 'xlsxwriter' para melhor desempenho
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             xls = pd.ExcelFile(filepath)
             for name in xls.sheet_names:
@@ -200,6 +200,7 @@ def process_multi_tab_update():
                     dfs_base[b_tab] = df_b_filtered.reset_index()
 
         output = io.BytesIO()
+        # OTIMIZAÇÃO: Especifica o motor 'xlsxwriter' para melhor desempenho
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             for name, df in dfs_base.items():
                 df.to_excel(writer, sheet_name=name, index=False)
@@ -210,3 +211,4 @@ def process_multi_tab_update():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
+
